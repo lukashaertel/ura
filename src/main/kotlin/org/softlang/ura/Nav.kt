@@ -16,90 +16,47 @@ package org.softlang.ura
 data class Nav<out O, out A>(val operator: O, val argument: A, val then: Nav<O, A>?)
 
 /**
- * A problem in the resolution.
- */
-interface Problem
-
-/**
  * Resolver of navigation.
  *
  * @param A The argument type
- * @param T The *type* type
- * @param I The *instance* type
+ * @param R The result type
+ * @param P The problem type
  */
-interface Resolver<in A, T, I> {
-    /**
-     * Applies the resolver on the *type*.
-     *
-     * @param argument The argument to resolve
-     * @param type The *type* to handle
-     * @return Returns the new resolved *type* if applicable
-     */
-    fun type(argument: A, type: T): Choice<T, Problem>
-
-    /**
-     * Applies the resolver on the *instance*.
-     *
-     * @param argument The argument to resolve
-     * @param type The *type* to handle
-     * @param instance THe *instance* to handle
-     * @return Returns the new resolved *instance*
-     */
-    fun instance(argument: A, type: T, instance: I): I
+interface Resolver<in A, R, out P> {
+    fun resolve(context: R, argument: A): Choice<R, P>
 }
 
 
 /**
  * A Context of resolution.
+ * @param O The operation type
+ * @param A The argument type
+ * @param R The result type
+ * @param P The problem type
+ * @param global The global instance, passed as context to the first resolution
  */
-abstract class Context<in O, in A, T, I>(val rootType: T, val rootInstance: I) {
+abstract class Context<in O, in A, R, out P>(val global: R) {
     /**
-     * Maps an operation definition to an operation.
+     * Maps an operation definition in a context to an operation.
      */
-    abstract fun operation(o: O): Choice<Resolver<A, T, I>, Problem>
+    abstract fun operation(context: R, o: O): Choice<Resolver<A, R, P>, P>
 
     /**
      * Resolves the given definition. Returns either the instance or a problem that prevented resolution.
      * @param node The definition to resolve
-     * @return Returns the instance of a problem
+     * @return Returns the instance or a problem
      */
-    fun resolve(node: Nav<O, A>): Choice<I, Problem> {
-        fun f(t: T, i: I, node: Nav<O, A>): Choice<I, Problem> =
-                // Resolve operation
-                operation(node.operator) outerMapLeft { r ->
-                    // Check if we are at the end of resolution
+    fun resolve(node: Nav<O, A>): Choice<R, P> {
+        fun f(c: R, node: Nav<O, A>): Choice<R, P> =
+                operation(c, node.operator) outerMapLeft {
+                    // After successful resolution, handle continuation if there's more nodes after the current
                     if (node.then != null)
-                    // Handle continuation
-                        r.type(node.argument, t) outerMapLeft { t2 ->
-                            // Resolve the instance
-                            val i2 = r.instance(node.argument, t, i)
-                            f(t2, i2, node.then)
-                        }
+                        it.resolve(c, node.argument) outerMapLeft { f(it, node.then) }
                     else
-                    // Handle terminal
-                        r.type(node.argument, t) mapLeft {
-                            // Resolve the instance
-                            r.instance(node.argument, t, i)
-                        }
+                        it.resolve(c, node.argument)
                 }
 
         // Apply to root
-        return f(rootType, rootInstance, node)
+        return f(global, node)
     }
-}
-
-/**
- * A problem of key lookup in a map.
- */
-data class MapLookupProblem<K, out V>(val map: Map<K, V>, val key: K, val message: String) : Problem
-
-/**
- * Default context with explicit root *type* and *instance* and an explicit map of operation to resolver.
- */
-class DefaultContext<O, in A, T, I>(rootType: T, rootInstance: I, val resolvers: Map<O, Resolver<A, T, I>>) :
-        Context<O, A, T, I>(rootType, rootInstance) {
-    override fun operation(o: O) =
-            resolvers[o].orUnit.mapRight {
-                MapLookupProblem(resolvers, o, "Operation $o is not defined")
-            }
 }

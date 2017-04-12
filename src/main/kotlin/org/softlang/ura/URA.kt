@@ -1,5 +1,6 @@
 package org.softlang.ura
 
+import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URI
 import java.nio.charset.Charset
@@ -55,66 +56,68 @@ fun uraFrom(vararg string: String): URA {
     return ura(string[0], f(1))
 }
 
+// TODO Lookup operations, also maybe we need runtime type here
+typealias Bundle = Map<Mime, Any?>
+
+interface Problem
+
 /**
  * A URA resolver.
  */
-typealias URAResolver = Resolver<URI, Set<Mime>, Map<Mime, Any?>>
+typealias URAResolver = Resolver<URI, Bundle, Problem>
 
 /**
  * A URA context.
  */
-typealias URAContext = Context<String, URI, Set<Mime>, Map<Mime, Any?>>
-
-/**
- * A URA default context
- */
-typealias URADefaultContext = DefaultContext<String, URI, Set<Mime>, Map<Mime, Any?>>
-
-/**
- * Creates a URA default context with the standard *type* and *instance*.
- * @param resolvers The resolvers as a map of operation to URA resolvers.
- * @return Returns a new URA default context.
- */
-fun uraDefaultContext(resolvers: Map<String, URAResolver>) =
-        URADefaultContext(emptySet(), emptyMap(), resolvers)
-
-/**
- * Creates a URA default context with the standard *type* and *instance*.
- * @param pairs The list of entries in the resolvers map
- * @return Returns a new URA default context.
- */
-fun uraDefaultContext(vararg pairs: Pair<String, URAResolver>) =
-        uraDefaultContext(mapOf(*pairs))
+typealias URAContext = Context<String, URI, Bundle, Problem>
 
 fun main(args: Array<String>) {
     data class GenericProblem(val message: String) : Problem
 
     class HTTPResolver : URAResolver {
-        override fun type(argument: URI, type: Set<Mime>): Choice<Set<Mime>, Problem> {
+        override fun resolve(context: Bundle, argument: URI): Choice<Bundle, Problem> {
             // Get a connection to the
             val x = argument.toURL().openConnection() as? HttpURLConnection
                     ?: return right(GenericProblem("Cannot open HTTP connection"))
 
             return mime(x.contentType).orUnit mapLeft {
-                setOf(it)
+                val i = x.inputStream
+                        .reader(it.paramsMap["charset"] ?: "UTF-8")
+                        .use(InputStreamReader::readText)
+
+                mapOf(it to i)
             } mapRight {
                 GenericProblem("Unable to parse MIME type of the response")
             }
         }
-
-        override fun instance(argument: URI, type: Set<Mime>, instance: Map<Mime, Any?>): Map<Mime, Any?> {
-            val x = argument.toURL().openConnection() as HttpURLConnection
-
-            val m = mime(x.contentType)!!
-            val c = Charset.forName(m.paramsMap["charset"] ?: "UTF-8")
-            return mapOf(m to x.inputStream.reader(c).use { it.readText() })
-        }
     }
 
-    val ctx = uraDefaultContext(
-            "http" to HTTPResolver(),
-            "https" to HTTPResolver()
-    )
+    class SelectResolver : URAResolver {
+        override fun resolve(context: Bundle, argument: URI): Choice<Bundle, Problem> {
+            val e = context.entries.first { it.key.top == "text" && it.key.sub == "html" }
+            return left(mapOf(e.key to (e.value as String).substring(10..20))) // TODO This is just a thing
+        }
+
+    }
+
+    val ctx = object : URAContext(emptyMap()) {
+        override fun operation(context: Bundle, o: String): Choice<Resolver<URI, Bundle, Problem>, Problem> {
+            // TODO: Formalize selection
+            if (context.isEmpty()) {
+                when (o) {
+                    "https", "http" -> return left(HTTPResolver())
+                }
+            }
+
+            if (context.keys.any { it.top == "text" && it.sub == "html" }) {
+                when (o) {
+                    "select" -> return left(SelectResolver())
+                }
+            }
+
+            return right(GenericProblem("No resolver found"))
+        }
+    }
 
     val x = ctx.resolve(uraFrom("http://www.google.de"))
     val y = ctx.resolve(uraFrom("http://www.google.de", "select", "arg://line"))

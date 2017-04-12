@@ -1,5 +1,9 @@
 package org.softlang.ura
 
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.nio.charset.Charset
+
 /**
  * Applies [then] if receiver is not *null*, otherwise returns *null* itself.
  *
@@ -27,9 +31,5 @@ infix fun String?.nc(other: String?) =
  */
 val String.opt get() = if (isEmpty()) null else this
 
-/**
- * Prints the return value of the block.
- */
-inline fun debug(block: () -> Any?) {
-    println(block())
-}
+@Suppress("NOTHING_TO_INLINE")
+inline fun InputStream.reader(charset: String) = reader(Charset.forName(charset))
