@@ -1,5 +1,8 @@
 package org.softlang.ura
 
+import org.softlang.ura.util.Choice
+import org.softlang.ura.util.outerMapLeft
+
 /**
  * This file is the abstract definition of a typed and nested resolution.
  */

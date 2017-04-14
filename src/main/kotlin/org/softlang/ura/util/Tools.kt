@@ -1,4 +1,4 @@
-package org.softlang.ura
+package org.softlang.ura.util
 
 import java.io.InputStream
 import java.nio.charset.Charset

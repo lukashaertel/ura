@@ -1,5 +1,7 @@
 package org.softlang.ura
 
+import org.softlang.ura.util.*
+
 /**
  * Composes two contexts of different type definitions. Requires:
  * * a transformation from primary to secondary operation space
@@ -28,7 +30,7 @@ fun <O1, A1, R1, P1, O2, A2, R2, P2> Context<O1, A1, R1, P1>.over(
         other: Context<O2, A2, R2, P2>,
         txOp: (O1) -> O2,
         txArgument: (A1) -> A2,
-        txResult: BX<R1, R2>,
+        txResult: Bx<R1, R2>,
         txProblem: (P2) -> P1) =
         object : Context<O1, A1, R1, P1>(global) {
             override fun operation(context: R1, op: O1) =

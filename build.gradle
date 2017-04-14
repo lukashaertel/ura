@@ -5,6 +5,7 @@ buildscript {
     ext.kotlin_version = '1.1.1'
     ext.junit_version = '4.12'
     ext.ktor_version = '0.3.1'
+    ext.guava_version = '21.0'
 
     repositories {
         mavenCentral()
@@ -28,6 +29,7 @@ repositories {
 dependencies {
     compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
     compile "org.jetbrains.ktor:ktor-netty:$ktor_version"
+    compile "com.google.guava:guava:$guava_version"
 
     testCompile "junit:junit:$junit_version"
 }

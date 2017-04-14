@@ -1,5 +1,8 @@
 package org.softlang.ura
 
+import org.softlang.ura.content.Mime
+import org.softlang.ura.content.mime
+import org.softlang.ura.util.*
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URI

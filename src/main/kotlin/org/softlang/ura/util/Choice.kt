@@ -1,4 +1,4 @@
-package org.softlang.ura
+package org.softlang.ura.util
 
 /**
  * Union type.

@@ -1,4 +1,8 @@
-package org.softlang.ura
+package org.softlang.ura.content
+
+import org.softlang.ura.util.nc
+import org.softlang.ura.util.notNull
+import org.softlang.ura.util.opt
 
 /**
  * A fully represented MIME type.
