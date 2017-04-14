@@ -10,7 +10,7 @@ import java.nio.charset.Charset
  * @param U The result of the transformation
  * @receiver The nullable argument
  * @param then The transformation
- * @return Returns null if argument is *null*, otherwise applies [then]
+ * @return Returns *null* if argument is *null*, otherwise applies [then]
  */
 inline infix fun <reified T, reified U> T?.notNull(then: (T) -> U) =
         if (this != null) then(this) else null

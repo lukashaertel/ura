@@ -1,7 +1,6 @@
 package org.softlang.ura
 
-import org.softlang.ura.content.Mime
-import org.softlang.ura.content.mime
+import org.softlang.ura.content.*
 import org.softlang.ura.util.*
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -59,36 +58,35 @@ fun uraFrom(vararg string: String): URA {
     return ura(string[0], f(1))
 }
 
-// TODO Lookup operations, also maybe we need runtime type here
-typealias Bundle = Map<Mime, Any?>
-
 interface Problem
 
 /**
  * A URA resolver.
  */
-typealias URAResolver = Resolver<URI, Bundle, Problem>
+typealias URAResolver = Resolver<URI, Content, Problem>
 
 /**
  * A URA context.
  */
-typealias URAContext = Context<String, URI, Bundle, Problem>
+typealias URAContext = Context<String, URI, Content, Problem>
 
 fun main(args: Array<String>) {
     data class GenericProblem(val message: String) : Problem
 
     class HTTPResolver : URAResolver {
-        override fun resolve(context: Bundle, argument: URI): Choice<Bundle, Problem> {
+        override fun resolve(context: Content, argument: URI): Choice<Content, Problem> {
             // Get a connection to the
             val x = argument.toURL().openConnection() as? HttpURLConnection
                     ?: return right(GenericProblem("Cannot open HTTP connection"))
 
             return mime(x.contentType).orUnit mapLeft {
-                val i = x.inputStream
-                        .reader(it.paramsMap["charset"] ?: "UTF-8")
-                        .use(InputStreamReader::readText)
-
-                mapOf(it to i)
+                content {
+                    it.lifted by {
+                        x.inputStream
+                                .reader(it.paramsMap["charset"] ?: "UTF-8")
+                                .use(InputStreamReader::readText)
+                    }
+                }
             } mapRight {
                 GenericProblem("Unable to parse MIME type of the response")
             }
@@ -96,15 +94,22 @@ fun main(args: Array<String>) {
     }
 
     class SelectResolver : URAResolver {
-        override fun resolve(context: Bundle, argument: URI): Choice<Bundle, Problem> {
-            val e = context.entries.first { it.key.top == "text" && it.key.sub == "html" }
-            return left(mapOf(e.key to (e.value as String).substring(10..20))) // TODO This is just a thing
+        override fun resolve(context: Content, argument: URI): Choice<Content, Problem> {
+            return context.with("text/html") { s: String ->
+                content {
+                    "text/html" by {
+                        s.substring(10..20)
+                    }
+                }
+            }.resolved.orUnit.mapRight {
+                GenericProblem("Cannot handle the context")
+            }
         }
 
     }
 
-    val ctx = object : URAContext(emptyMap()) {
-        override fun operation(context: Bundle, o: String): Choice<Resolver<URI, Bundle, Problem>, Problem> {
+    val ctx = object : URAContext(Content.empty) {
+        override fun operation(context: Content, o: String): Choice<Resolver<URI, Content, Problem>, Problem> {
             // TODO: Formalize selection
             if (context.isEmpty()) {
                 when (o) {
@@ -112,7 +117,7 @@ fun main(args: Array<String>) {
                 }
             }
 
-            if (context.keys.any { it.top == "text" && it.sub == "html" }) {
+            if (xMime<String>("text/html") in context) {
                 when (o) {
                     "select" -> return left(SelectResolver())
                 }
@@ -124,7 +129,7 @@ fun main(args: Array<String>) {
 
     val x = ctx.resolve(uraFrom("http://www.google.de"))
     val y = ctx.resolve(uraFrom("http://www.google.de", "select", "arg://line"))
-    println(x)
-    println(y)
+    println(x mapLeft { it.materialize() })
+    println(y mapLeft { it.materialize() })
 
 }

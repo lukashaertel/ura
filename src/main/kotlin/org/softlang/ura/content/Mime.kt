@@ -23,6 +23,11 @@ data class Mime(val top: String, val tree: String?, val sub: String, val suffix:
                 ?: emptyMap()
     }
 
+    /**
+     * Returns the MIME type without parameters.
+     */
+    val lifted get() = Mime(top, tree, sub, suffix, null)
+
     override fun toString() =
             "$top/${(tree nc ".") ?: ""}$sub${("+" nc suffix) ?: ""}${("; " nc params) ?: ""}"
 }

@@ -1,7 +1,9 @@
 package org.softlang.ura.content
 
 import com.google.common.collect.ImmutableMap
+import com.google.common.collect.Maps
 import org.softlang.ura.util.*
+import sun.swing.plaf.synth.StyleAssociation
 import java.util.spi.CalendarDataProvider
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSubclassOf
@@ -27,6 +29,11 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
                 else -> k1.qualifiedName compareNullable k2.qualifiedName
             }
         }
+
+        /**
+         * Empty content.
+         */
+        val empty = Content(emptyMap())
     }
 
     /**
@@ -44,8 +51,8 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
             return with(xMime<T>(mime), block)
         }
 
-        inline fun <reified T : Any> with(string: String, noinline block: (T) -> U): Item<U> {
-            return with(xMime<T>(string) ?: return Item(xMimeNothing, null), block)
+        inline fun <reified T : Any> with(mimeString: String, noinline block: (T) -> U): Item<U> {
+            return with(xMime<T>(mimeString) ?: return Item(xMimeNothing, null), block)
         }
     }
 
@@ -69,6 +76,31 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
         }
     }
 
+    /**
+     * True if there is not content given.
+     */
+    fun isEmpty() = associated.isEmpty()
+
+    /**
+     * Content contains the given extended MIME if it is directly associated or there is any mapping to a subtype.
+     */
+    operator fun contains(xMime: XMime<*>?): Boolean {
+        // Null given, never contained
+        if (xMime == null)
+            return false
+
+        // Direct hit
+        if (associated.containsKey(xMime))
+            return true
+
+        // Indirect hit
+        if (coAssociated.getOrDefault(xMime.mime, emptyList()).any { it.first.isSubclassOf(xMime.type) })
+            return true
+
+        // Nothing found
+        return false
+    }
+
     fun <T : Any, U : Any> with(xMime: XMime<T>, block: (T) -> U): Item<U> {
         // Test for direct hit
         val x = associated[xMime]
@@ -87,7 +119,9 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
             return Item(XMime(xMime.mime, y.first), block(t))
         }
 
-        // Not present
+        // TODO: Parameter space matching
+
+        // Nothing found
         return Item(xMimeNothing, null)
     }
 
@@ -95,10 +129,14 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
         return with(xMime<T>(mime), block)
     }
 
-    inline fun <reified T : Any, U : Any> with(string: String, noinline block: (T) -> U): Item<U> {
-        return with(xMime<T>(string) ?: return Item(xMimeNothing, null), block)
+    inline fun <reified T : Any, U : Any> with(mimeString: String, noinline block: (T) -> U): Item<U> {
+        return with(xMime<T>(mimeString) ?: return Item(xMimeNothing, null), block)
     }
 
+    /**
+     * Materializes the content.
+     */
+    fun materialize() = associated.mapValues { (_, v) -> v() }
 }
 
 /**

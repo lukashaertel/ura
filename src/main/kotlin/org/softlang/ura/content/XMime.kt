@@ -11,7 +11,13 @@ import kotlin.reflect.KClass
  * @param mime The MIME type
  * @param type The runtime type's reflected type
  */
-data class XMime<T : Any>(val mime: Mime, val type: KClass<T>)
+data class XMime<T : Any>(val mime: Mime, val type: KClass<T>) {
+
+    /**
+     * Returns the extended MIME type without parameters.
+     */
+    val lifted get() = XMime(mime.lifted, type)
+}
 
 /**
  * Creates an extended MIME type inferring [T] from the context.
