@@ -23,10 +23,15 @@ inline fun <reified T : Any> xMime(mime: Mime) =
         XMime(mime, T::class)
 
 /**
- * Creates an extended MIME type inferring [T] from the context. Parses the MIME type from a stirng.
+ * Creates an extended MIME type inferring [T] from the context. Parses the MIME type from a string.
  * @param T The runtime type's static type
  * @param mimeString The MIME represented as a string
  * @return Returns an extended MIME type or null if string is not parsable.
  */
 inline fun <reified T : Any> xMime(mimeString: String) =
         mime(mimeString) notNull { XMime(it, T::class) }
+
+/**
+ * Value of an extended MIME that represents *nothing*.
+ */
+val xMimeNothing = XMime(Mime("application", null, "nothing", null, null), Nothing::class)

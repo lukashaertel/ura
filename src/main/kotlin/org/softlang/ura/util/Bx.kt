@@ -27,7 +27,19 @@ interface Bx<T, U> {
 }
 
 /**
- * Creates a binary transformation from both receiver: [T] to [U] and [reverse]: [U] to [T].
+ * Creates a binary transformation from both [forward]: [T] to [U] and [reverse]: [U] to [T].
+ */
+inline fun <T, U> bx(crossinline forward: (T) -> U, crossinline reverse: (U) -> T) = object : Bx<T, U> {
+    override fun invoke(t: T) =
+            forward(t)
+
+    override fun invokeReverse(u: U) =
+            reverse(u)
+}
+
+/**
+ * Creates a binary transformation from both receiver: [T] to [U] and [reverse]: [U] to [T]. Note: since Kotlin does
+ * not yet support crossinline on receivers, it might be preferable to use [bx].
  */
 inline infix fun <T, U> ((T) -> U).withReverse(crossinline reverse: (U) -> T) = object : Bx<T, U> {
     override fun invoke(t: T) =
@@ -35,5 +47,4 @@ inline infix fun <T, U> ((T) -> U).withReverse(crossinline reverse: (U) -> T) = 
 
     override fun invokeReverse(u: U) =
             reverse(u)
-
 }
