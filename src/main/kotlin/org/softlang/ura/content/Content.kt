@@ -97,9 +97,14 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
         if (coAssociated.getOrDefault(xMime.mime, emptyList()).any { it.first.isSubclassOf(xMime.type) })
             return true
 
+        // Unification hit
+        if (associated.keys.any { xMime unifies it })
+            return true
+
         // Nothing found
         return false
     }
+
 
     fun <T : Any, U : Any> with(xMime: XMime<T>, block: (T) -> U): Item<U> {
         // Test for direct hit
@@ -119,7 +124,13 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
             return Item(XMime(xMime.mime, y.first), block(t))
         }
 
-        // TODO: Parameter space matching
+        // Unification hit
+        val z = associated.entries.filter { (k, _) -> xMime unifies k }.firstOrNull()
+        if (z != null) {
+            @Suppress("UNCHECKED_CAST")
+            val t = z.value() as T
+            return Item(xMime unify z.key, block(t))
+        }
 
         // Nothing found
         return Item(xMimeNothing, null)
@@ -211,6 +222,16 @@ fun main(args: Array<String>) {
         x.i shouldBe 0
     }
 
+    x.with("app/foo") { y: Y ->
+        y.i shouldBe 1
+        y.j shouldBe 1.0f
+    }
+
+    x.with("app/foo") { z: Z ->
+        z.i shouldBe 2
+        z.j shouldBe "Hello"
+    }
+
     val y = content {
         "app/foo" by { Y(1, 1.0f) }
         "app/foo" by { Z(2, "Hello") }
@@ -239,7 +260,7 @@ fun main(args: Array<String>) {
         i + 1
     }
 
-    r1.response shouldMatch { mime repEq "app/string" }
+    r1.response shouldBe xMime<String>("app/string")
     r1.resolved shouldBe 23401
 
     val r2 = z.with("app/float") { s: String ->
@@ -248,7 +269,30 @@ fun main(args: Array<String>) {
         i * 20
     }
 
-    r2.response shouldMatch { mime repEq "app/int" }
+    r2.response shouldBe xMime<Int>("app/int")
     r2.resolved shouldBe 2000
+
+    /**
+     * Example of parameter unification
+     */
+    val w = content {
+        "app/int; space=positive" by { 100 }
+        "app/int; space=negative" by { -100 }
+    }
+
+    // Explicit parameter space lookup
+    val r3 = w.with("app/int; space=negative even=true") { i: Int ->
+        i + 20
+    }
+    r3.response shouldBe xMime<Int>("app/int; space=negative")
+    r3.resolved shouldBe -80
+
+    // Unification parameter space lookup
+    val r4 = w.with("app/int") { i: Int ->
+        i + 20
+    }
+    r4.response shouldBe xMime<Int>("app/int")
+    r4.resolved shouldBe 120
+
 
 }

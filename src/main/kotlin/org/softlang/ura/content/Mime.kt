@@ -3,6 +3,16 @@ package org.softlang.ura.content
 import org.softlang.ura.util.nc
 import org.softlang.ura.util.notNull
 import org.softlang.ura.util.opt
+import org.softlang.ura.util.equalMapping
+import kotlin.collections.Map.Entry
+
+@kotlin.jvm.JvmName("joinEntriesToParams")
+private fun Iterable<Entry<*, *>>.joinToParams() =
+        joinToString(separator = " ") { "${it.key}=${it.value}" }.trim().opt
+
+@kotlin.jvm.JvmName("joinPairsToParams")
+private fun Iterable<Pair<*, *>>.joinToParams() =
+        joinToString(separator = " ") { "${it.first}=${it.second}" }.trim().opt
 
 /**
  * A fully represented MIME type.
@@ -27,6 +37,27 @@ data class Mime(val top: String, val tree: String?, val sub: String, val suffix:
      * Returns the MIME type without parameters.
      */
     val lifted get() = Mime(top, tree, sub, suffix, null)
+
+    /**
+     * Returns true if the MIME types are equal with unification, i.e., lifted representation is data equal and
+     * parameter spaces are equalMapping.
+     * @param other The other MIME type
+     * @return True if equalMapping equal
+     */
+    infix fun unifies(other: Mime) =
+            lifted == other.lifted && paramsMap equalMapping other.paramsMap
+
+    /**
+     * Returns the unified MIME type.
+     * @param other The other MIME type
+     * @return The unified MIME type or null if not equalMapping.
+     */
+    infix fun unify(other: Mime) =
+            if (this unifies other)
+            // TODO Figure out true unification format for parameter spaces
+                Mime(top, tree, sub, suffix, (paramsMap.entries intersect other.paramsMap.entries).joinToParams())
+            else
+                throw IllegalArgumentException("$other does not unify with $this.")
 
     override fun toString() =
             "$top/${(tree nc ".") ?: ""}$sub${("+" nc suffix) ?: ""}${("; " nc params) ?: ""}"
@@ -67,10 +98,10 @@ fun mime(top: String, eSub: String, params: Map<String, String>) =
             val (tree, sub, suffix) = it.destructured
 
             // Join the provided key values
-            val joint = params.entries.joinToString { "${it.key}=${it.value}" }
+            val joint = params.entries.joinToParams()
 
             // Trim matches and convert to optional where appropriate
-            Mime(top, tree.trim().opt, sub.trim(), suffix.trim().opt, joint.opt)
+            Mime(top, tree.trim().opt, sub.trim(), suffix.trim().opt, joint)
         }
 
 /**
@@ -81,10 +112,10 @@ fun mime(top: String, eSub: String, vararg pairs: Pair<String, String>) =
             val (tree, sub, suffix) = it.destructured
 
             // Join the provided key values
-            val joint = pairs.joinToString { "${it.first}=${it.second}" }
+            val joint = pairs.asIterable().joinToParams()
 
             // Trim matches and convert to optional where appropriate
-            Mime(top, tree.trim().opt, sub.trim(), suffix.trim().opt, joint.opt)
+            Mime(top, tree.trim().opt, sub.trim(), suffix.trim().opt, joint)
         }
 
 /**

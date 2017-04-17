@@ -81,7 +81,7 @@ fun main(args: Array<String>) {
 
             return mime(x.contentType).orUnit mapLeft {
                 content {
-                    it.lifted by {
+                    it by {
                         x.inputStream
                                 .reader(it.paramsMap["charset"] ?: "UTF-8")
                                 .use(InputStreamReader::readText)
