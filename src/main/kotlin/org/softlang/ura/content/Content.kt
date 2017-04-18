@@ -2,6 +2,7 @@ package org.softlang.ura.content
 
 import com.google.common.collect.ImmutableMap
 import com.google.common.collect.Maps
+import com.google.common.collect.Ordering
 import org.softlang.ura.util.*
 import sun.swing.plaf.synth.StyleAssociation
 import java.util.spi.CalendarDataProvider
@@ -29,6 +30,14 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
                 else -> k1.qualifiedName compareNullable k2.qualifiedName
             }
         }
+
+        /**
+         * Compares maps of strings to strings lexicographically by their keys
+         */
+        private val paramKeysComparator = Ordering
+                .natural<String>()
+                .lexicographical<String>()
+                .onResult(Map<String, String>::keys)
 
         /**
          * Empty content.
@@ -124,8 +133,11 @@ data class Content(private val associated: Map<XMime<*>, () -> Any>) {
             return Item(XMime(xMime.mime, y.first), block(t))
         }
 
-        // Unification hit
-        val z = associated.entries.filter { (k, _) -> xMime unifies k }.firstOrNull()
+        // Unification hit (greatest matching parameter share)
+        val z = associated.entries
+                .filter { (k, _) -> xMime unifies k }
+                .sortedWith(paramKeysComparator.onResult { it.key.mime.paramsMap })
+                .maxBy { it.key.mime.paramsMap.size }
         if (z != null) {
             @Suppress("UNCHECKED_CAST")
             val t = z.value() as T
@@ -276,7 +288,8 @@ fun main(args: Array<String>) {
      * Example of parameter unification
      */
     val w = content {
-        "app/int; space=positive" by { 100 }
+        "app/int; space=positive" by { 95 }
+        "app/int; space=positive even=true" by { 100 }
         "app/int; space=negative" by { -100 }
     }
 

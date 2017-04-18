@@ -6,6 +6,8 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URI
 import java.nio.charset.Charset
+import kotlin.properties.ReadOnlyProperty
+import kotlin.reflect.KProperty
 
 /**
  * This file is the concrete definition of a URA resolution.
@@ -70,8 +72,54 @@ typealias URAResolver = Resolver<URI, Content, Problem>
  */
 typealias URAContext = Context<String, URI, Content, Problem>
 
+abstract class URAFormalResolver(val ops: Set<String>) : URAResolver {
+    // TODO Type
+    val handlers = hashMapOf<XMime<*>, Any>()
+
+    inline fun <reified T : Any, reified U>
+            handler(mime: Mime, noinline handle: (T) -> U): ValProperty<URAFormalResolver, (T) -> U> {
+        handlers += xMime<T>(mime) to handle
+        return ValProperty(handle)
+    }
+
+    inline fun <reified T : Any, reified U>
+            handler(mimeString: String, noinline handle: (T) -> U) =
+            handler(mime(mimeString) ?: throw IllegalArgumentException("Illegal MIME: $mimeString"), handle)
+
+
+    override fun resolve(context: Content, argument: URI): Choice<Content, Problem> {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+}
+
+class URAFormalContext(global: Content,
+                       val rootResolvers: Set<URAFormalResolver>,
+                       val nestedResolvers: Set<URAFormalResolver>) : URAContext(global) {
+    override fun operation(context: Content, op: String): Choice<URAResolver, Problem> {
+        if (context.isEmpty())
+            return operationFrom(rootResolvers, context, op)
+        else
+            return operationFrom(nestedResolvers, context, op)
+    }
+
+    private fun operationFrom(set: Set<URAFormalResolver>, context: Content, op: String): Choice<URAResolver, Problem> {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+}
+
 fun main(args: Array<String>) {
     data class GenericProblem(val message: String) : Problem
+
+    class RR : URAFormalResolver(setOf("http")) {
+        val viaString by handler("text/html") { s: String ->
+
+        }
+
+        val viaBytes by handler("text/html") { b: ByteArray ->
+
+        }
+    }
 
     class HTTPResolver : URAResolver {
         override fun resolve(context: Content, argument: URI): Choice<Content, Problem> {
@@ -109,16 +157,16 @@ fun main(args: Array<String>) {
     }
 
     val ctx = object : URAContext(Content.empty) {
-        override fun operation(context: Content, o: String): Choice<Resolver<URI, Content, Problem>, Problem> {
+        override fun operation(context: Content, op: String): Choice<Resolver<URI, Content, Problem>, Problem> {
             // TODO: Formalize selection
             if (context.isEmpty()) {
-                when (o) {
+                when (op) {
                     "https", "http" -> return left(HTTPResolver())
                 }
             }
 
             if (xMime<String>("text/html") in context) {
-                when (o) {
+                when (op) {
                     "select" -> return left(SelectResolver())
                 }
             }
