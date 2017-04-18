@@ -15,9 +15,9 @@ import kotlin.reflect.full.isSuperclassOf
  * Content of extended MIME types instantiated by provider methods. This class needs to be created by [content] to
  * ensure type safe associations.
  *
- * @property associated Private list of untyped associations.
+ * @property associated Map of untyped associations.
  */
-data class Content(private val associated: Map<XMime<*>, () -> Any>) {
+data class Content(val associated: Map<XMime<*>, () -> Any>) {
     companion object {
         /**
          * Compares pairs of items with class information as first by their generality.

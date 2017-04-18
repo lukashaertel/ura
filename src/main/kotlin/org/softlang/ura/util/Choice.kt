@@ -95,25 +95,25 @@ infix fun <X, T, U : X, R> Choice<T, U>.onRight(onRight: (X) -> R) =
 /**
  * Maps the left value to either a value of a new left type or the old right type.
  */
-infix fun <T, U, V> Choice<T, U>.outerMapLeft(block: (T) -> Choice<V, U>) =
+inline infix fun <T, U, V> Choice<T, U>.outerMapLeft(block: (T) -> Choice<V, U>) =
         if (isLeft) block(left) else Choice<V, U>(false, right)
 
 /**
  * Maps the right value to either a value of a new right type or the old right type.
  */
-infix fun <T, U, V> Choice<T, U>.outerMapRight(block: (U) -> Choice<T, V>) =
+inline infix fun <T, U, V> Choice<T, U>.outerMapRight(block: (U) -> Choice<T, V>) =
         if (isRight) block(right) else Choice<T, V>(true, left)
 
 /**
  * Maps the left value to a value of a new left type.
  */
-infix fun <T, U, V> Choice<T, U>.mapLeft(block: (T) -> V) =
+inline infix fun <T, U, V> Choice<T, U>.mapLeft(block: (T) -> V) =
         Choice<V, U>(isLeft, if (isLeft) block(left) else it)
 
 /**
  * Maps the right value to a value of a new right type.
  */
-infix fun <T, U, V> Choice<T, U>.mapRight(block: (U) -> V) =
+inline infix fun <T, U, V> Choice<T, U>.mapRight(block: (U) -> V) =
         Choice<T, V>(isLeft, if (isRight) block(right) else it)
 
 /**
