@@ -136,6 +136,8 @@ data class Content(val associated: Map<XMime<*>, () -> Any>) {
         // Unification hit (greatest matching parameter share)
         val z = associated.entries
                 .filter { (k, _) -> xMime unifies k }
+		// TODO: Now that there are wildcards, sorting needs to prefer non-wildcard matches to
+		// ensure that the strongest definition is picked  
                 .sortedWith(paramKeysComparator.onResult { it.key.mime.paramsMap })
                 .maxBy { it.key.mime.paramsMap.size }
         if (z != null) {
