@@ -1,9 +1,6 @@
 package org.softlang.ura.content
 
-import org.softlang.ura.util.nc
-import org.softlang.ura.util.notNull
-import org.softlang.ura.util.opt
-import org.softlang.ura.util.equalMapping
+import org.softlang.ura.util.*
 import kotlin.collections.Map.Entry
 
 @kotlin.jvm.JvmName("joinEntriesToParams")
@@ -45,7 +42,11 @@ data class Mime(val top: String, val tree: String?, val sub: String, val suffix:
      * @return True if equalMapping equal
      */
     infix fun unifies(other: Mime) =
-            lifted == other.lifted && paramsMap equalMapping other.paramsMap
+            top eqWc other.top &&
+                    tree eqWc other.tree &&
+                    sub eqWc other.sub &&
+                    suffix eqWc other.suffix &&
+                    paramsMap equalMapping other.paramsMap
 
     /**
      * Returns the unified MIME type.
@@ -54,8 +55,11 @@ data class Mime(val top: String, val tree: String?, val sub: String, val suffix:
      */
     infix fun unify(other: Mime) =
             if (this unifies other)
-            // TODO Figure out true unification format for parameter spaces
-                Mime(top, tree, sub, suffix, (paramsMap.entries intersect other.paramsMap.entries).joinToParams())
+                Mime(top resolveWc other.top,
+                        tree resolveWc other.tree,
+                        sub resolveWc other.sub,
+                        suffix resolveWc other.suffix,
+                        (paramsMap.entries intersect other.paramsMap.entries).joinToParams()) // TODO: Parameter unif.
             else
                 throw IllegalArgumentException("$other does not unify with $this.")
 
@@ -137,4 +141,5 @@ fun main(args: Array<String>) {
     println(mime("text/html+xml; charset=UTF-8"))
     println(mime("application", "xml", "charset" to "UTF-8"))
     println(mime("application", "xml", mapOf()))
+    println(mime("app/*"))
 }

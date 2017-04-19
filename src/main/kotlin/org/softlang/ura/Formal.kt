@@ -6,6 +6,8 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URI
 
+// TODO: This first EDSL draft might need some heavy redesign.
+
 /**
  * A formally defined provider with a configuration [C] that provides [Content] from a [URI].
  * @param C The configuration type, usually a metamodel
@@ -21,12 +23,12 @@ data class FormalProvider<in C>(
  * @param T The source type
  * @param U The destination type
  * @param src The source extended MIME
- * @param dst The destination extended MIME
+ * @param dst The destination extended MIME, as calculated by the response
  * @param handle The handle method
  */
 data class FormalHandler<in C, T : Any, U : Any>(
         val src: XMime<T>,
-        val dst: XMime<U>,
+        val dst: (XMime<*>) -> XMime<U>,
         val handle: C.(URI, T) -> Choice<U, Problem>)
 
 /**
@@ -38,6 +40,45 @@ class FormalHandlerCollector<C> {
      */
     val handlers = hashSetOf<FormalHandler<C, *, *>>()
 
+    infix fun Mime.into(tx: (XMime<*>) -> Mime) =
+            this to tx
+
+    infix fun String.into(tx: (XMime<*>) -> String) =
+            this to tx
+
+
+    /**
+     * For a pair of MIMEs, adds a formal handler to the collected handlers, inferring [T] and [U] from the context.
+     * @param T The source type
+     * @param U The destination type
+     * @receiver A pair encapsulating source and target MIME type
+     * @param handle The handle method
+     */
+    @kotlin.jvm.JvmName("viaMimeTx")
+    inline infix fun <reified T : Any, reified U : Any>
+            Pair<Mime, ((XMime<*>) -> Mime)>.via(noinline handle: C.(URI, T) -> Choice<U, Problem>) =
+            FormalHandler(xMime<T>(first), { xMime<U>(second(it)) }, handle).apply {
+                handlers += this
+            }
+
+    /**
+     * For a pair of MIME strings, adds a formal handler to the collected handlers, inferring [T] and [U] from the
+     * context.
+     * @param T The source type
+     * @param U The destination type
+     * @receiver A pair encapsulating source and target MIME type as strings
+     * @param handle The handle method
+     */
+    @kotlin.jvm.JvmName("viaParsedTx")
+    inline infix fun <reified T : Any, reified U : Any>
+            Pair<String, ((XMime<*>) -> String)>.via(noinline handle: C.(URI, T) -> Choice<U, Problem>) =
+            FormalHandler(xMime<T>(first) ?: illegalArg("Source MIME format illegal"),
+                    { xMime<U>(second(it)) ?: illegalArg("Destination MIME format from Tx illegal") },
+                    handle).apply {
+                handlers += this
+            }
+
+
     /**
      * For a pair of MIMEs, adds a formal handler to the collected handlers, inferring [T] and [U] from the context.
      * @param T The source type
@@ -48,7 +89,7 @@ class FormalHandlerCollector<C> {
     @kotlin.jvm.JvmName("viaMime")
     inline infix fun <reified T : Any, reified U : Any>
             Pair<Mime, Mime>.via(noinline handle: C.(URI, T) -> Choice<U, Problem>) =
-            FormalHandler(xMime<T>(first), xMime<U>(second), handle).apply {
+            FormalHandler(xMime<T>(first), { xMime<U>(second) }, handle).apply {
                 handlers += this
             }
 
@@ -63,8 +104,8 @@ class FormalHandlerCollector<C> {
     @kotlin.jvm.JvmName("viaParsed")
     inline infix fun <reified T : Any, reified U : Any>
             Pair<String, String>.via(noinline handle: C.(URI, T) -> Choice<U, Problem>) =
-            FormalHandler(xMime<T>(first) ?: throw IllegalArgumentException("Source MIME format illegal"),
-                    xMime<U>(second) ?: throw IllegalArgumentException("Destination MIME format illegal"),
+            FormalHandler(xMime<T>(first) ?: illegalArg("Source MIME format illegal"),
+                    xMime<U>(second)?.const?.unbind() ?: illegalArg("Destination MIME format  illegal"),
                     handle).apply {
                 handlers += this
             }
@@ -79,7 +120,37 @@ class FormalHandlerCollector<C> {
     @kotlin.jvm.JvmName("idViaMime")
     inline infix fun <reified T : Any>
             Mime.idVia(noinline handle: C.(URI, T) -> Choice<T, Problem>) =
-            FormalHandler(xMime<T>(this), xMime<T>(this), handle).apply {
+            FormalHandler(xMime<T>(this), { xMime<T>(this) }, handle).apply {
+                handlers += this
+            }
+
+    /**
+     * For a MIME, adds a formal handler to the collected handlers, inferring [T] from the context. Retains the
+     * response MIME instead of the source MIME.
+     * @param T The source type
+     * @receiver The MIME type
+     * @param handle The handle method
+     */
+    @kotlin.jvm.JvmName("idViaRetainedParsed")
+    inline infix fun <reified T : Any>
+            String.idViaResponse(noinline handle: C.(URI, T) -> Choice<T, Problem>) =
+            FormalHandler(xMime<T>(this) ?: illegalArg("Source MIME format illegal"),
+                    { xMime<T>(it.mime) },
+                    handle).apply {
+                handlers += this
+            }
+
+    /**
+     * For a MIME string, adds a formal handler to the collected handlers, inferring [T] from the context. Retains the
+     * response MIME instead of the source MIME.
+     * @param T The source type
+     * @receiver The MIME type as a string
+     * @param handle The handle method
+     */
+    @kotlin.jvm.JvmName("idViaRetainedMime")
+    inline infix fun <reified T : Any>
+            Mime.idViaResponse(noinline handle: C.(URI, T) -> Choice<T, Problem>) =
+            FormalHandler(xMime<T>(this), { xMime<T>(it.mime) }, handle).apply {
                 handlers += this
             }
 
@@ -92,8 +163,8 @@ class FormalHandlerCollector<C> {
     @kotlin.jvm.JvmName("idViaParsed")
     inline infix fun <reified T : Any>
             String.idVia(noinline handle: C.(URI, T) -> Choice<T, Problem>) =
-            FormalHandler(xMime<T>(this) ?: throw IllegalArgumentException("Source MIME format illegal"),
-                    xMime<T>(this) ?: throw IllegalArgumentException("Destination MIME format illegal"),
+            FormalHandler(xMime<T>(this) ?: illegalArg("Source MIME format illegal"),
+                    xMime<T>(this)?.const?.unbind() ?: illegalArg("Destination MIME format  illegal"),
                     handle).apply {
                 handlers += this
             }
@@ -114,7 +185,7 @@ class FormalRootResolver<C>(
         // Assert root status, just to be sure
         context shouldBe Content.empty
 
-        // Return the provider implementation of configurated provision
+        // Return the provider implementation of configured provision
         return provider.provide(config, argument)
     }
 }
@@ -159,10 +230,14 @@ class FormalNestedResolver<C>(
                     val arb = it.handle as C.(URI, Any) -> Any
 
                     // Read from context the given type
-                    context.with(it.src) { x: Any ->
+                    val item = context.with(it.src) { x: Any ->
                         // Provide the destination extended MIME
-                        it.dst to { arb(config, argument, x) }
-                    }.resolved
+                        { arb(config, argument, x) }
+                    }
+
+                    // Compose by applying on the response type pairing with the resolved item, or null if resolved
+                    // is null
+                    it.dst(item.response) notNullTo item.resolved
                 }.associate { it }))
     }
 }
@@ -335,15 +410,17 @@ inline fun contextWith(configure: FormalResolverCollector.() -> Unit) =
         }
 
 fun main(args: Array<String>) {
-    class GenericProblem(val what: String) : Problem
+    data class GenericProblem(val what: String) : Problem
+    data class IOProblem(val what: String) : Problem
+    data class ParameterProblem(val what: String, val uri: URI) : Problem
 
     val c = contextWith {
-        setOf("http", "https").rootWith { u: URI ->
+        "http".rootWith { u: URI ->
             // Get a connection to the
             val x = u.toURL().openConnection() as? HttpURLConnection
 
             if (x == null)
-                right(GenericProblem("Unable to open $u as HTTP connection"))
+                right(IOProblem("Unable to open $u as HTTP connection"))
             else
                 mime(x.contentType).orUnit mapLeft {
                     content {
@@ -354,13 +431,31 @@ fun main(args: Array<String>) {
                         }
                     }
                 } mapRight {
-                    GenericProblem("Unable to parse MIME type of the response")
+                    IOProblem("Unable to parse MIME type of the response")
                 }
         }
 
+        "lorem".rootWith { u: URI ->
+            if (u.schemeSpecificPart != "-")
+                right(ParameterProblem("Illegal SSP for URI ${u.schemeSpecificPart}", u))
+            else
+                left(content {
+                    "text/plain" by {
+                        """Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed et tellus ex. Nullam ultricies lorem nec elit congue faucibus. Maecenas nunc ligula, varius ac vulputate in, porta vitae arcu. Nullam dignissim malesuada mi ac gravida. Aenean sit amet sagittis ligula. Pellentesque pellentesque quam felis, sit amet eleifend urna commodo quis. Etiam non nisi leo.
+
+Sed a nisi pulvinar, sagittis risus mattis, facilisis ante. In lacinia commodo velit non auctor. Suspendisse elementum blandit ligula. Donec blandit arcu sit amet tortor aliquam, ut auctor nisl bibendum. Quisque diam libero, fermentum rhoncus eros non, ornare condimentum risus. Phasellus placerat turpis nec dui lacinia, eu vulputate neque dignissim. Quisque nec arcu massa.
+
+Curabitur sed orci nec mi aliquet ullamcorper ac in orci. Curabitur convallis, est ut laoreet consectetur, metus leo vulputate ex, ac dapibus lorem sem et tortor. Praesent imperdiet purus sit amet ipsum aliquam, ac faucibus augue rutrum. Nullam interdum ex sit amet elit maximus imperdiet. In pretium, ligula ac mollis vulputate, nisl felis ultrices justo, ut ultrices risus nisi ac nisi. Donec ut ligula lacus. Quisque tincidunt turpis ac purus interdum, eu dictum nibh pellentesque. Proin iaculis libero mauris, euismod ornare leo varius at. Curabitur id hendrerit leo. In quis lectus pulvinar, ultricies est a, tempor massa. Vestibulum convallis purus efficitur, semper ligula nec, bibendum ligula. Duis ultrices felis a semper laoreet. Maecenas eget laoreet quam. Fusce blandit quam sit amet elit volutpat finibus.
+
+Sed aliquet varius lectus sed accumsan. Ut vestibulum viverra mi, vehicula vulputate justo aliquet ut. Fusce nec consequat felis. Morbi congue nunc in imperdiet lacinia. Aliquam erat volutpat. Etiam malesuada quis purus commodo mattis. Curabitur sagittis aliquam justo eu euismod. Praesent leo quam, commodo eget blandit et, elementum ut mi. Vivamus laoreet nulla leo, a aliquam libero maximus non. Ut ut pellentesque arcu. Mauris non sapien odio. Nulla maximus mollis turpis, nec ultricies lorem dignissim ut. Maecenas mattis leo nibh, nec sollicitudin justo blandit vel. Curabitur porta orci eget sem malesuada molestie.
+
+Cras pellentesque, sapien vel suscipit blandit, nulla sapien condimentum eros, consequat mollis lectus odio nec tellus. Cras in lectus nec tellus lacinia tincidunt id at nunc. Nam sit amet consectetur diam. Maecenas aliquet enim tellus, in fermentum risus molestie porttitor. Vestibulum tempus pulvinar mauris. Aenean a commodo libero. Praesent efficitur ac tortor id placerat. Duis et ullamcorper neque. Curabitur sit amet tortor elementum, fringilla metus in, sodales mauris. Phasellus lacus orci, laoreet ac laoreet condimentum, elementum id felis. Donec sed accumsan arcu, sed ornare elit."""
+                    }
+                })
+        }
+
         "select".nestedWith {
-            // TODO Arbitrary matches, e.g. "text/*"
-            "text/html" idVia { u: URI, str: String ->
+            "text/*" idViaResponse { u: URI, str: String ->
                 u.matches(Regex("""arg:line-(\d+)-(\d+)""")) { (s, t) ->
                     val start = s.toInt()
                     val end = t.toInt()
@@ -372,15 +467,18 @@ fun main(args: Array<String>) {
 
                     str.substring(start - 1, end)
                 }.mapRight {
-                    GenericProblem("Illegal format for URI $u")
+                    ParameterProblem("SSP should be line-<start>-<end> or chars-<start>-<end>", u)
                 }
             }
         }
     }
 
+    println(c.resolve(uraFrom("lorem:-", "select", "arg:line-3-3")).mapLeft(Content::materialize))
+    println(c.resolve(uraFrom("lorem:-", "select", "arg:chars-1-100")).mapLeft(Content::materialize))
+
     println(c.resolve(uraFrom("http://www.google.de", "select", "arg:line-1-1")).mapLeft(Content::materialize))
-    println(c.resolve(uraFrom("http://www.google.de", "select", "arg:line-1-2")).mapLeft(Content::materialize))
-    println(c.resolve(uraFrom("http://www.google.de", "select", "arg:line-2-2")).mapLeft(Content::materialize))
-    println(c.resolve(uraFrom("http://www.google.de", "select", "arg:chars-100-110")).mapLeft(Content::materialize))
+    //println(c.resolve(uraFrom("http://www.google.de", "select", "arg:line-1-2")).mapLeft(Content::materialize))
+    //println(c.resolve(uraFrom("http://www.google.de", "select", "arg:line-2-2")).mapLeft(Content::materialize))
+    //println(c.resolve(uraFrom("http://www.google.de", "select", "arg:chars-100-110")).mapLeft(Content::materialize))
 
 }

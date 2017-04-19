@@ -39,6 +39,44 @@ inline infix fun <reified T> T?.repEq(other: String) =
             "null" == other
 
 /**
+ * Equal with wildcards.
+ * @receiver The left operand
+ * @param other The right operand
+ * @return True if this or other are wildcards or equal.
+ */
+infix fun String?.eqWc(other: String?) =
+        this == "*" || other == "*" || this == other
+
+/**
+ * Resolves wildcards.
+ * @receiver The left operand
+ * @param other The right operand
+ * @return The other string if one is a wildcard, or the matching string.
+ */
+@kotlin.jvm.JvmName("resolveNullableWc")
+infix fun String?.resolveWc(other: String?) =
+        when {
+            this == "*" -> other
+            other == "*" -> this
+            this == other -> this
+            else -> throw IllegalArgumentException("Mismatching strings.")
+        }
+
+/**
+ * Resolves wildcards.
+ * @receiver The left operand
+ * @param other The right operand
+ * @return The other string if one is a wildcard, or the matching string.
+ */
+infix fun String.resolveWc(other: String) =
+        when {
+            this == "*" -> other
+            other == "*" -> this
+            this == other -> this
+            else -> throw IllegalArgumentException("Mismatching strings.")
+        }
+
+/**
  * Nullable concatenation, returns the concatenation only iff *both* strings are not *null*, otherwise *null*.
  * @receiver The first string
  * @param other The second string
@@ -52,6 +90,7 @@ infix fun String?.nc(other: String?) =
  * @receiver The string to convert
  */
 val String.opt get() = if (isEmpty()) null else this
+
 
 @Suppress("NOTHING_TO_INLINE")
 inline fun InputStream.reader(charset: String) = reader(Charset.forName(charset))
@@ -67,3 +106,18 @@ inline infix fun <reified T> T.shouldBe(other: T) =
  */
 inline infix fun <reified T> T.shouldMatch(p: T.() -> Boolean) =
         apply { if (!this.p()) error("$this does not match the predicate") }
+
+@Suppress("NOTHING_TO_INLINE")
+inline fun illegalArg(string: String): Nothing =
+        throw IllegalArgumentException(string)
+
+
+/**
+ * Creates a tuple of type [Pair] from this and [that], returns *null* if one is *null*.
+ *
+ */
+infix fun <A : Any, B : Any> A?.notNullTo(that: B?) =
+        if (this == null || that == null)
+            null
+        else
+            this to that
